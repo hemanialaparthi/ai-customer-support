@@ -9,22 +9,41 @@ export default function Home() {
       content: `Hello! I'm here to help you understand your symptoms and find the right care. How can I assist you today?`,
     },
   ]);
+  const [message, setMessage] = useState('');
 
   const sendMessage = async () => {
-    setMessage('')
-    setMessages( (messages) => [...messages, {role: 'user', content: message}])
+    setMessages((messages) => [...messages, { role: 'user', content: message }]);
+    setMessage('');
+
     const response = await fetch('api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify([...messages, {role: 'user', content: message}])
+      body: JSON.stringify([...messages, { role: 'user', content: message }])
     });
-    const data = await response.json();
-    setMessages((messages) => [...messages, {role:'assistant', content: data.message}]);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let assistantMessage = '';
+    
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      assistantMessage += decoder.decode(value, { stream: true });
+      setMessages((messages) => {
+        const updatedMessages = [...messages];
+        const lastMessage = updatedMessages[updatedMessages.length - 1];
+        if (lastMessage.role === 'assistant') {
+          lastMessage.content = assistantMessage;
+        } else {
+          updatedMessages.push({ role: 'assistant', content: assistantMessage });
+        }
+        return updatedMessages;
+      });
+    }
   }
 
-  const [message, setMessage] = useState('');
   return (
     <Box width={'100vw'} maxHeight={'100vh'} display={'flex'} flexDirection={'column'} justifyContent={'center'} alignItems={'center'} p={2}>
       <Stack direction={'column'} width={'500px'} height={'700px'} border={'1px solid black'} p={2}>

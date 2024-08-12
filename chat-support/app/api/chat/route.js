@@ -52,10 +52,24 @@ export async function POST(req) {
 
     const data = await req.json();
 
-    const completion = await openai.chat.completions.create({
+    const completionStream = await openai.chat.completions.create({
         messages: [{ role: "system", content: systemPrompt }, ...data],
         model: "gpt-3.5-turbo",
+        stream: true, 
     });
 
-    return NextResponse.json({ message: completion.choices[0].message.content}, {status: 200});
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+        async start(controller) {
+            for await (const chunk of completionStream) {
+                controller.enqueue(encoder.encode(chunk.choices[0]?.delta?.content || ""));
+            }
+            controller.close();
+        }
+    });
+
+    return new NextResponse(readableStream, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
 }
+
